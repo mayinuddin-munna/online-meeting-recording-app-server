@@ -16,15 +16,18 @@ app.get("/", (req, res) => {
 
 // Verify JWT
 
-const verifyJWT = (req, res, next) =>{
+const verifyJWT = (req, res, next) => {
   const authorization = req.headers.authorization;
-  if(!authorization){
-    return res.status(401).send({error: "Unauthorized access!"});
+
+  if (!authorization) {
+    return res.status(401).send({ error: "Unauthorized access!" });
   }
+
   const token = authorization.split(' ')[1];
-  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) =>{
-    if(error){
-      return res.status(403).send({error: "Unauthorized access!" })
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) => {
+
+    if (error) {
+      return res.status(403).send({ error: "Unauthorized access!" })
     }
 
     req.decoded = decoded;
@@ -46,12 +49,55 @@ async function run() {
   try {
     await client.connect();
 
-    // JWT related api
-    app.post('/jwt', async(req, res) =>{
+    // Galaxy collection
+    const usersCollection = client.db("galaxyMeeting").collection("users");
+
+
+    // User related API
+
+    // TODO: add verifyJWT in the API
+    app.get('/all-users', async (req, res) => {
+      const result = await usersCollection.find().toArray();
+      res.send(result);
+    })
+
+    // TODO: add verifyJWT in the API
+    app.get('/user/:email', async(req, res) =>{
+      const email = req.params.email;
+      const decodedEmail = req.decoded.email;
+
+      // if(email !== decodedEmail){
+      //   return res.status(403).send({ error: 'forbidden access'})
+      // }
+      const query = { email : email };
+      const result = await usersCollection.findOne(query);
+    
+      res.send(result);
+
+    })
+
+    app.post('/add-users', async (req, res) => {
       const user = req.body;
-      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET,{
-        expiresIn: '10h'});
-      res.send({token}); 
+      const query = { email: user.email };
+      const existingUser = await usersCollection.findOne(query)
+
+      if (existingUser) {
+        return res.send({ message: "User already exist" })
+      }
+
+      console.log("user", user);
+
+      const result = await usersCollection.insertOne(user);
+      res.send(result);
+    })
+
+    // JWT related api
+    app.post('/jwt', async (req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
+        expiresIn: '10h'
+      });
+      res.send({ token });
     })
 
     await client.db("admin").command({ ping: 1 });
