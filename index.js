@@ -14,6 +14,24 @@ app.get("/", (req, res) => {
   res.send("Hello World!");
 });
 
+// Verify JWT
+
+const verifyJWT = (req, res, next) =>{
+  const authorization = req.headers.authorization;
+  if(!authorization){
+    return res.status(401).send({error: "Unauthorized access!"});
+  }
+  const token = authorization.split(' ')[1];
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) =>{
+    if(error){
+      return res.status(403).send({error: "Unauthorized access!" })
+    }
+
+    req.decoded = decoded;
+    next();
+  })
+}
+
 const uri = `mongodb+srv://${process.env.USER_DB}:${process.env.PASS_DB}@cluster0.jkwo6ss.mongodb.net/?retryWrites=true&w=majority`;
 
 const client = new MongoClient(uri, {
@@ -33,7 +51,7 @@ async function run() {
       const user = req.body;
       const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET,{
         expiresIn: '10h'});
-      res.send(token);
+      res.send({token}); 
     })
 
     await client.db("admin").command({ ping: 1 });
