@@ -15,11 +15,11 @@ const io = new Server(httpServer, {
   // methods: ["GET", "POST"],
 });
 
-httpServer.listen(8000, () => {
+const port = process.env.PORT || 8000;
+httpServer.listen(port, () => {
   console.log('Socket Server is running on port 8000');
 });
 
-const port = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors());
