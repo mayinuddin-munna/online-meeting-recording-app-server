@@ -9,11 +9,7 @@ const jwt = require("jsonwebtoken");
 require("dotenv").config();
 const { MongoClient, ServerApiVersion } = require("mongodb");
 const httpServer = http.createServer(app);
-const io = new Server(httpServer, {
-  cors: true,
-  // origin: "http://localhost:5173",
-  // methods: ["GET", "POST"],
-});
+const io = new Server(httpServer, { cors: true });
 
 const port = process.env.PORT || 8000;
 httpServer.listen(port, () => {
@@ -28,83 +24,6 @@ app.get("/", (req, res) => {
   res.send("Hello World!");
 });
 
-// <----- Socket.io Start ---->
-// handshake.auth <-- is used for user authentication
-
-io.use((socket, next) => {
-  const username = socket.handshake.auth.username;
-  // console.log('38-socket',socket);
-  if (!username) {
-    return next(new Error("Invalid User!"));
-  }
-
-  socket.username = username;
-  socket.userId = uuIdv4();
-  next();
-});
-
-io.on("connection", (socket) => {
-  // socket events
-
-  // all connected users
-  const users = [];
-  for (let [id, socket] of io.of("/").sockets) {
-    users.push({
-      userId: socket.userId,
-      username: socket.username,
-    });
-  }
-
-  // all user event
-  socket.emit("users", users);
-
-  // connected user details
-  socket.emit("session", {
-    username: socket.username,
-    userId: socket.userId,
-  });
-
-  // new user event
-  socket.broadcast.emit("user connected", {
-    username: socket.username,
-    userId: socket.userId,
-  });
-
-  // new message
-  socket.on("new message", (message) => {
-    const newMessage = {
-      username: socket.username,
-      userId: socket.userId,
-      message,
-    };
-
-    socket.emit("new message", newMessage); // Emit to the sender
-    socket.broadcast.emit("new message", newMessage); // Broadcast to others
-  });
-});
-
-// <----- Socket.io ends ------>
-
-// Verify JWT
-
-const verifyJWT = (req, res, next) => {
-  const authorization = req.headers.authorization;
-
-  if (!authorization) {
-    return res.status(401).send({ error: "Unauthorized access!" });
-  }
-
-  const token = authorization.split(" ")[1];
-  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) => {
-    if (error) {
-      return res.status(403).send({ error: "Unauthorized access!" });
-    }
-
-    req.decoded = decoded;
-    next();
-  });
-};
-
 // ------------------------------------
 // MongoDB URI
 // ------------------------------------
@@ -118,6 +37,7 @@ const client = new MongoClient(uri, {
   },
 });
 
+const users = [{}];
 async function run() {
   try {
     await client.connect();
@@ -126,23 +46,61 @@ async function run() {
     // Galaxy collection
     // ------------------------------------
     const usersCollection = client.db("galaxyMeeting").collection("users");
+    const messagesCollection = client
+      .db("galaxyMeeting")
+      .collection("messages");
+
+    // Inside your socket.io connection event handler
+    io.on("connection", (socket) => {
+      console.log("New Connection");
+
+      socket.on("joined", ({ user }) => {
+        users[socket.id] = user;
+        console.log(`${user} has joined `);
+        socket.broadcast.emit("userJoined", {
+          user: "Admin",
+          message: ` ${users[socket.id]} has joined`,
+        });
+        socket.emit("welcome", {
+          user: "Admin",
+          message: `Welcome to the chat,${users[socket.id]} `,
+        });
+      });
+
+      socket.on("message", ({ message, id }) => {
+        io.emit("sendMessage", { user: users[id], message, id });
+      });
+
+      socket.on("disconnect", () => {
+        socket.broadcast.emit("leave", {
+          user: "Admin",
+          message: `${users[socket.id]}  has left`,
+        });
+        console.log(`user left`);
+      });
+    });
+
+    // API endpoint to fetch chat history
+    app.get("/chat/history", async (req, res) => {
+      try {
+        const history = await messagesCollection.find().toArray();
+        res.send({ messages: history });
+      } catch (error) {
+        console.error("Error fetching chat history:", error);
+        res.status(500).send({ error: "Internal server error" });
+      }
+    });
 
     // User related API
-
-    // TODO: add verifyJWT in the API
     app.get("/all-users", async (req, res) => {
       const result = await usersCollection.find().toArray();
       res.send(result);
     });
 
-    // TODO: add verifyJWT in the API
     app.get("/user/:email", async (req, res) => {
       const email = req.params.email;
       const decodedEmail = req.decoded.email;
 
-      // if(email !== decodedEmail){
-      //   return res.status(403).send({ error: 'forbidden access'})
-      // }
       const query = { email: email };
       const result = await usersCollection.findOne(query);
 
@@ -164,15 +122,6 @@ async function run() {
       res.send(result);
     });
 
-    // JWT related api
-    app.post("/jwt", async (req, res) => {
-      const user = req.body;
-      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
-        expiresIn: "10h",
-      });
-      res.send({ token });
-    });
-
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
@@ -182,7 +131,3 @@ async function run() {
   }
 }
 run().catch(console.dir);
-
-app.listen(port, () => {
-  console.log(`Online meeting recording app listening on port ${port}`);
-});
