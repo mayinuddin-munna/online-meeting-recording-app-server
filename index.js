@@ -1,7 +1,14 @@
+const http = require('http');
+const { Server } = require('socket.io');
+const { v4: uuIdv4 } = require('uuid');
 const path = require("path");
 const express = require("express");
 const app = express();
-const socketIO = require("socket.io");
+const cors = require("cors");
+const jwt = require("jsonwebtoken");
+require("dotenv").config();
+const { MongoClient, ServerApiVersion } = require("mongodb");
+const port = process.env.PORT || 5000;
 
 const port = process.env.PORT || 8080;
 const env = process.env.NODE_ENV || "development";
@@ -13,6 +20,66 @@ app.get("*", (req, res, next) => {
   }
   next();
 });
+
+// <----- Socket.io Start ---->
+// handshake.auth <-- is used for user authentication
+
+io.use((socket, next) => {
+  const username = socket.handshake.auth.username;
+  // console.log('38-socket',socket);
+  if (!username) {
+    return next(new Error("Invalid User!"));
+  }
+
+  socket.username = username;
+  socket.userId = uuIdv4();
+  next();
+});
+
+
+io.on("connection", (socket) => {
+  // socket events
+
+  // all connected users
+  const users = [];
+  for (let [id, socket] of io.of('/').sockets) {
+    users.push({
+      userId: socket.userId,
+      username: socket.username,
+    });
+  }
+
+  // all user event
+  socket.emit("users", users);
+
+  // connected user details
+  socket.emit("session", {
+    username: socket.username,
+    userId: socket.userId
+  });
+
+  // new user event
+  socket.broadcast.emit("user connected", {
+    username: socket.username,
+    userId: socket.userId
+  });
+
+  // new message
+  socket.on("new message", (message) => {
+    const newMessage = {
+      username: socket.username,
+      userId: socket.userId,
+      message,
+    };
+
+    socket.emit("new message", newMessage); // Emit to the sender
+    socket.broadcast.emit("new message", newMessage); // Broadcast to others
+  });
+
+});
+
+// <----- Socket.io ends ------>
+
 
 app.use(express.static(path.join(__dirname, "public")));
 app.use(express.static(path.join(__dirname, "node_modules")));
@@ -72,21 +139,52 @@ io.sockets.on("connection", function (socket) {
     const clientsInRoom = io.sockets.adapter.rooms.get(room);
     let numClients = clientsInRoom ? clientsInRoom.size : 0;
 
-    if (numClients === 0) {
-      // Create room
-      socket.join(room);
-      roomAdmin = socket.id;
-      socket.emit("created", room, socket.id);
-    } else {
-      log("Client " + socket.id + " joined room " + room);
+    // User related API
 
-      // Join room
-      io.sockets.in(room).emit("join", room); // Notify users in room
-      socket.join(room);
-      io.to(socket.id).emit("joined", room, socket.id); // Notify client that they joined a room
-      io.sockets.in(room).emit("ready", socket.id); // Room is ready for creating connections
-    }
-  });
+    // TODO: add verifyJWT in the API
+    app.get('/all-users', async (req, res) => {
+      const result = await usersCollection.find().toArray();
+      res.send(result);
+    })
+
+    // TODO: add verifyJWT in the API
+    app.get('/user/:email', async(req, res) =>{
+      const email = req.params.email;
+      const decodedEmail = req.decoded.email;
+
+      // if(email !== decodedEmail){
+      //   return res.status(403).send({ error: 'forbidden access'})
+      // }
+      const query = { email : email };
+      const result = await usersCollection.findOne(query);
+    
+      res.send(result);
+
+    })
+
+    app.post('/add-users', async (req, res) => {
+      const user = req.body;
+      const query = { email: user.email };
+      const existingUser = await usersCollection.findOne(query)
+
+      if (existingUser) {
+        return res.send({ message: "User already exist" })
+      }
+
+      console.log("user", user);
+
+      const result = await usersCollection.insertOne(user);
+      res.send(result);
+    })
+
+    // JWT related api
+    app.post('/jwt', async (req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
+        expiresIn: '10h'
+      });
+      res.send({ token });
+    })
 
   /**
    * Kick participant from a call
