@@ -10,7 +10,6 @@ require("dotenv").config();
 const { MongoClient, ServerApiVersion } = require("mongodb");
 const port = process.env.PORT || 5000;
 
-const port = process.env.PORT || 8080;
 const env = process.env.NODE_ENV || "development";
 
 // Redirect to https
