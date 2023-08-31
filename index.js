@@ -166,6 +166,11 @@ async function run() {
     });
 
     // review related API 
+    app.get('/get-review', async(req, res) =>{
+      const result = await reviewsCollection.find().toArray();
+      res.send(result);
+    })
+
     app.post('/add-review', verifyJWT, async (req, res) =>{
       const email = req.body.email;
       const review = req.body;
