@@ -1,92 +1,73 @@
+const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
-const { v4: uuIdv4 } = require("uuid");
-const express = require("express");
-const app = express();
-require("dotenv").config();
+const { roomHandler } = require("./room");
+
+// --------------------------------
+// Cross-origin resource sharing
+// --------------------------------
 const cors = require("cors");
-const jwt = require("jsonwebtoken");
+
+// --------------------------------
 require("dotenv").config();
+const jwt = require("jsonwebtoken");
+// --------------------------------
+
+// Monogdb DATABASE
 const { MongoClient, ServerApiVersion } = require("mongodb");
-const httpServer = http.createServer(app);
-const io = new Server(httpServer, {
-  cors: true,
-  // origin: "http://localhost:5173",
-  // methods: ["GET", "POST"],
-});
 
-const port = process.env.PORT || 8000;
-httpServer.listen(port, () => {
-  console.log("Socket Server is running on port 8000");
-});
+// Express app
+const app = express();
 
+// ------------------------------------
 // Middleware
-app.use(cors());
+// ------------------------------------
+app.use(cors);
 app.use(express.json());
 
+// ------------------------------------
+// Port
+// ------------------------------------
+const port = process.env.PORT || 8000;
+
+// ------------------------------------
+// Create a socket.io server
+// ------------------------------------
+const httpServer = http.createServer(app);
+
+// ------------------------------------
+// Define socket.io with cors that help to client to server transition
+// ------------------------------------
+const io = new Server(httpServer, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
+});
+
+// ---------------------------------------
+// Implement user connection for socket.io
+// ------------------------------------
+io.on("connection", (socket) => {
+  console.log("a user connected");
+
+  // Import room from room folder
+  roomHandler(socket);
+
+  socket.on("disconnect", () => {
+    console.log("user disconnected");
+  });
+});
+
+// ---------------------------------------
+// Basic request
 app.get("/", (req, res) => {
   res.send("Hello World!");
 });
 
-// <----- Socket.io Start ---->
-// handshake.auth <-- is used for user authentication
-
-io.use((socket, next) => {
-  const username = socket.handshake.auth.username;
-  // console.log('38-socket',socket);
-  if (!username) {
-    return next(new Error("Invalid User!"));
-  }
-
-  socket.username = username;
-  socket.userId = uuIdv4();
-  next();
-});
-
-io.on("connection", (socket) => {
-  // socket events
-
-  // all connected users
-  const users = [];
-  for (let [id, socket] of io.of("/").sockets) {
-    users.push({
-      userId: socket.userId,
-      username: socket.username,
-    });
-  }
-
-  // all user event
-  socket.emit("users", users);
-
-  // connected user details
-  socket.emit("session", {
-    username: socket.username,
-    userId: socket.userId,
-  });
-
-  // new user event
-  socket.broadcast.emit("user connected", {
-    username: socket.username,
-    userId: socket.userId,
-  });
-
-  // new message
-  socket.on("new message", (message) => {
-    const newMessage = {
-      username: socket.username,
-      userId: socket.userId,
-      message,
-    };
-
-    socket.emit("new message", newMessage); // Emit to the sender
-    socket.broadcast.emit("new message", newMessage); // Broadcast to others
-  });
-});
-
-// <----- Socket.io ends ------>
-
+// ------------------------------------
 // Verify JWT
-
+// ------------------------------------
 const verifyJWT = (req, res, next) => {
   const authorization = req.headers.authorization;
 
@@ -141,8 +122,8 @@ async function run() {
       const email = req.params.email;
       const decodedEmail = req.decoded.email;
 
-      if(email !== decodedEmail){
-        return res.status(403).send({ error: 'Forbidden access'})
+      if (email !== decodedEmail) {
+        return res.status(403).send({ error: "Forbidden access" });
       }
       const query = { email: email };
       const result = await usersCollection.findOne(query);
@@ -165,24 +146,31 @@ async function run() {
       res.send(result);
     });
 
-    // review related API 
-    app.get('/get-review', async(req, res) =>{
+    // review related API
+    app.get("/get-review", async (req, res) => {
       const result = await reviewsCollection.find().toArray();
       res.send(result);
-    })
+    });
 
-    app.post('/add-review', verifyJWT, async (req, res) =>{
+    app.post("/add-review", verifyJWT, async (req, res) => {
       const email = req.body.email;
       const review = req.body;
       const decodedEmail = req.decoded.email;
 
-      if(email !== decodedEmail){
-        return res.status(403).send({ error: 'forbidden access'})
+      if (email !== decodedEmail) {
+        return res.status(403).send({ error: "forbidden access" });
       }
-      console.log('email',email, 'review', review, 'decodedEmail', decodedEmail );
+      console.log(
+        "email",
+        email,
+        "review",
+        review,
+        "decodedEmail",
+        decodedEmail
+      );
       const result = await reviewsCollection.insertOne(review);
       res.send(result);
-    })
+    });
 
     // JWT related api
     app.post("/jwt", async (req, res) => {
@@ -202,3 +190,12 @@ async function run() {
   }
 }
 run().catch(console.dir);
+
+// ------------------------------------
+// I put server listen to bottom
+// JS engine read synchronized
+// Its help to debug better way
+// ------------------------------------
+httpServer.listen(port, () => {
+  console.log("Socket Server is running on port 8000");
+});
