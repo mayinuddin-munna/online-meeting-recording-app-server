@@ -126,6 +126,7 @@ async function run() {
     // Galaxy collection
     // ------------------------------------
     const usersCollection = client.db("galaxyMeeting").collection("users");
+    const reviewsCollection = client.db("galaxyMeeting").collection("reviews");
 
     // User related API
 
@@ -136,13 +137,13 @@ async function run() {
     });
 
     // TODO: add verifyJWT in the API
-    app.get("/user/:email", async (req, res) => {
+    app.get("/user/:email", verifyJWT, async (req, res) => {
       const email = req.params.email;
       const decodedEmail = req.decoded.email;
 
-      // if(email !== decodedEmail){
-      //   return res.status(403).send({ error: 'forbidden access'})
-      // }
+      if(email !== decodedEmail){
+        return res.status(403).send({ error: 'Forbidden access'})
+      }
       const query = { email: email };
       const result = await usersCollection.findOne(query);
 
@@ -164,6 +165,20 @@ async function run() {
       res.send(result);
     });
 
+    // review related API 
+    app.post('/add-review', verifyJWT, async (req, res) =>{
+      const email = req.body.email;
+      const review = req.body;
+      const decodedEmail = req.decoded.email;
+
+      if(email !== decodedEmail){
+        return res.status(403).send({ error: 'forbidden access'})
+      }
+      console.log('email',email, 'review', review, 'decodedEmail', decodedEmail );
+      const result = await reviewsCollection.insertOne(review);
+      res.send(result);
+    })
+
     // JWT related api
     app.post("/jwt", async (req, res) => {
       const user = req.body;
@@ -182,7 +197,3 @@ async function run() {
   }
 }
 run().catch(console.dir);
-
-app.listen(port, () => {
-  console.log(`Online meeting recording app listening on port ${port}`);
-});
