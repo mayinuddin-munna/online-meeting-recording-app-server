@@ -65,4 +65,4 @@ const roomHandler = (socket) => {
   socket.on("send-message", addMessage);
 };
 
-module.export = roomHandler;
+module.exports = roomHandler;
