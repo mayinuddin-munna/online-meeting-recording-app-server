@@ -1,73 +1,89 @@
-const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
-const roomHandler = require("./room");
-
-// --------------------------------
-// Cross-origin resource sharing
-// --------------------------------
-const cors = require("cors");
-
-// --------------------------------
-require("dotenv").config();
-const jwt = require("jsonwebtoken");
-// --------------------------------
-
-// Monogdb DATABASE
-const { MongoClient, ServerApiVersion } = require("mongodb");
-
-// Express app
+const { v4: uuIdv4 } = require("uuid");
+const express = require("express");
 const app = express();
+require("dotenv").config();
+const cors = require("cors");
+const jwt = require("jsonwebtoken");
+require("dotenv").config();
+const { MongoClient, ServerApiVersion } = require("mongodb");
+const httpServer = http.createServer(app);
+const io = new Server(httpServer, {
+  cors: true,
+  // origin: "http://localhost:5173",
+  // methods: ["GET", "POST"],
+});
 
-// ------------------------------------
-// Middleware
-// ------------------------------------
-app.use(cors);
-app.use(express.json());
-
-// ------------------------------------
-// Port
-// ------------------------------------
 const port = process.env.PORT || 8000;
 
-// ------------------------------------
-// Create a socket.io server
-// ------------------------------------
-const httpServer = http.createServer(app);
+// Middleware
+app.use(cors());
+app.use(express.json());
 
-// ------------------------------------
-// Define socket.io with cors that help to client to server transition
-// ------------------------------------
-const io = new Server(httpServer, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"],
-  },
-});
-
-// ---------------------------------------
-// Implement user connection for socket.io
-// ------------------------------------
-io.on("connection", (socket) => {
-  console.log("a user connected");
-
-  // Import room from room folder
-  roomHandler(socket);
-
-  socket.on("disconnect", () => {
-    console.log("user disconnected");
-  });
-});
-
-// ---------------------------------------
-// Basic request
 app.get("/", (req, res) => {
   res.send("Hello World!");
 });
 
-// ------------------------------------
+// <----- Socket.io Start ---->
+// handshake.auth <-- is used for user authentication
+
+io.use((socket, next) => {
+  const username = socket.handshake.auth.username;
+  // console.log('38-socket',socket);
+  if (!username) {
+    return next(new Error("Invalid User!"));
+  }
+
+  socket.username = username;
+  socket.userId = uuIdv4();
+  next();
+});
+
+io.on("connection", (socket) => {
+  // socket events
+
+  // all connected users
+  const users = [];
+  for (let [id, socket] of io.of("/").sockets) {
+    users.push({
+      userId: socket.userId,
+      username: socket.username,
+    });
+  }
+
+  // all user event
+  socket.emit("users", users);
+
+  // connected user details
+  socket.emit("session", {
+    username: socket.username,
+    userId: socket.userId,
+  });
+
+  // new user event
+  socket.broadcast.emit("user connected", {
+    username: socket.username,
+    userId: socket.userId,
+  });
+
+  // new message
+  socket.on("new message", (message) => {
+    const newMessage = {
+      username: socket.username,
+      userId: socket.userId,
+      message,
+    };
+
+    socket.emit("new message", newMessage); // Emit to the sender
+    socket.broadcast.emit("new message", newMessage); // Broadcast to others
+  });
+});
+
+// <----- Socket.io ends ------>
+
 // Verify JWT
-// ------------------------------------
+
 const verifyJWT = (req, res, next) => {
   const authorization = req.headers.authorization;
 
@@ -139,9 +155,7 @@ async function run() {
       if (existingUser) {
         return res.send({ message: "User already exist" });
       }
-
       console.log("user", user);
-
       const result = await usersCollection.insertOne(user);
       res.send(result);
     });
@@ -191,11 +205,6 @@ async function run() {
 }
 run().catch(console.dir);
 
-// ------------------------------------
-// I put server listen to bottom
-// JS engine read synchronized
-// Its help to debug better way
-// ------------------------------------
 httpServer.listen(port, () => {
-  console.log("Socket Server is running on port 8000");
+  console.log(`Socket Server is running on port ${port}`);
 });
