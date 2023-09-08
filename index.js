@@ -17,7 +17,6 @@ const io = new Server(httpServer, {
 
 const port = process.env.PORT || 8000;
 
-
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -139,8 +138,8 @@ async function run() {
       const email = req.params.email;
       const decodedEmail = req.decoded.email;
 
-      if(email !== decodedEmail){
-        return res.status(403).send({ error: 'Forbidden access'})
+      if (email !== decodedEmail) {
+        return res.status(403).send({ error: "Forbidden access" });
       }
       const query = { email: email };
       const result = await usersCollection.findOne(query);
@@ -156,31 +155,36 @@ async function run() {
       if (existingUser) {
         return res.send({ message: "User already exist" });
       }
-
       console.log("user", user);
-
       const result = await usersCollection.insertOne(user);
       res.send(result);
     });
 
-    // review related API 
-    app.get('/get-review', async(req, res) =>{
+    // review related API
+    app.get("/get-review", async (req, res) => {
       const result = await reviewsCollection.find().toArray();
       res.send(result);
-    })
+    });
 
-    app.post('/add-review', verifyJWT, async (req, res) =>{
+    app.post("/add-review", verifyJWT, async (req, res) => {
       const email = req.body.email;
       const review = req.body;
       const decodedEmail = req.decoded.email;
 
-      if(email !== decodedEmail){
-        return res.status(403).send({ error: 'forbidden access'})
+      if (email !== decodedEmail) {
+        return res.status(403).send({ error: "forbidden access" });
       }
-      console.log('email',email, 'review', review, 'decodedEmail', decodedEmail );
+      console.log(
+        "email",
+        email,
+        "review",
+        review,
+        "decodedEmail",
+        decodedEmail
+      );
       const result = await reviewsCollection.insertOne(review);
       res.send(result);
-    })
+    });
 
     // JWT related api
     app.post("/jwt", async (req, res) => {
