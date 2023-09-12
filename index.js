@@ -1,6 +1,5 @@
 const http = require("http");
 const { Server } = require("socket.io");
-const { v4: uuIdv4 } = require("uuid");
 const express = require("express");
 const app = express();
 require("dotenv").config();
@@ -22,7 +21,7 @@ app.use(cors());
 app.use(express.json());
 
 app.get("/", (req, res) => {
-  res.send("Hello World!");
+  res.send("Hello Galaxy Meet!");
 });
 
 // <----- Socket.io Start ---->
@@ -30,13 +29,17 @@ app.get("/", (req, res) => {
 
 io.use((socket, next) => {
   const username = socket.handshake.auth.username;
-  // console.log('38-socket',socket);
-  if (!username) {
+  const userId = socket.handshake.auth.userId;
+  const photoURL = socket.handshake.auth.photoURL;
+
+  if (!userId || !username || !photoURL) {
     return next(new Error("Invalid User!"));
   }
-
+  
   socket.username = username;
-  socket.userId = uuIdv4();
+  socket.userId = userId;
+  socket.photoURL = photoURL;
+  // console.log('photoURL -->',photoURL);
   next();
 });
 
@@ -49,6 +52,7 @@ io.on("connection", (socket) => {
     users.push({
       userId: socket.userId,
       username: socket.username,
+      photoURL: socket.photoURL,
     });
   }
 
@@ -68,12 +72,13 @@ io.on("connection", (socket) => {
   });
 
   // new message
-  socket.on("new message", (message, time) => {
+  socket.on("new message", (message, time ) => {
     const newMessage = {
       username: socket.username,
       userId: socket.userId,
+      photoURL: socket.photoURL,
       message,
-      time
+      time,
     };
 
     socket.emit("new message", newMessage); // Emit to the sender
