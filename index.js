@@ -179,14 +179,6 @@ async function run() {
       if (email !== decodedEmail) {
         return res.status(403).send({ error: "forbidden access" });
       }
-      console.log(
-        "email",
-        email,
-        "review",
-        review,
-        "decodedEmail",
-        decodedEmail
-      );
       const result = await reviewsCollection.insertOne(review);
       res.send(result);
     });
