@@ -39,7 +39,7 @@ io.use((socket, next) => {
   socket.username = username;
   socket.userId = userId;
   socket.photoURL = photoURL;
-  // console.log('photoURL -->',photoURL);
+  console.log('photoURL -->',photoURL);
   next();
 });
 
