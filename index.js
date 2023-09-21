@@ -73,7 +73,7 @@ io.on("connection", (socket) => {
       username: socket.username,
       userId: socket.userId,
       message,
-      time
+      time,
     };
 
     socket.emit("new message", newMessage); // Emit to the sender
@@ -126,7 +126,9 @@ async function run() {
     const usersCollection = client.db("galaxyMeeting").collection("users");
     const reviewsCollection = client.db("galaxyMeeting").collection("reviews");
     const aboutUsCollection = client.db("galaxyMeeting").collection("aboutUs");
-    const communitiesCollection = client.db("galaxyMeeting").collection("communities");
+    const communitiesCollection = client
+      .db("galaxyMeeting")
+      .collection("communities");
 
     // User related API
     app.get("/all-users", async (req, res) => {
@@ -187,16 +189,16 @@ async function run() {
     });
 
     // aboutUs related API
-    app.get('/aboutUs', async (req,res)=>{
+    app.get("/aboutUs", async (req, res) => {
       const result = await aboutUsCollection.find().toArray();
-      res.send(result)
-    })
+      res.send(result);
+    });
 
     // communities related API
-    app.get('/get-communities', async (req, res) =>{
+    app.get("/get-communities", async (req, res) => {
       const result = await communitiesCollection.find().toArray();
       res.send(result);
-    })
+    });
 
     // JWT related api
     app.post("/jwt", async (req, res) => {
