@@ -30,13 +30,17 @@ app.get("/", (req, res) => {
 
 io.use((socket, next) => {
   const username = socket.handshake.auth.username;
-  // console.log('38-socket',socket);
-  if (!username) {
+  const userId = socket.handshake.auth.userId;
+  const photoURL = socket.handshake.auth.photoURL;
+
+  if (!userId || !username || !photoURL) {
     return next(new Error("Invalid User!"));
   }
 
   socket.username = username;
-  socket.userId = uuIdv4();
+  socket.userId = userId;
+  socket.photoURL = photoURL;
+  console.log('photoURL -->',photoURL);
   next();
 });
 
@@ -49,11 +53,16 @@ io.on("connection", (socket) => {
     users.push({
       userId: socket.userId,
       username: socket.username,
+      photoURL: socket.photoURL,
     });
   }
 
   // all user event
   socket.emit("users", users);
+
+  socket.on("disconnect", () => {
+    console.log("User disconnected:", socket.id);
+  });
 
   // connected user details
   socket.emit("session", {
@@ -68,10 +77,11 @@ io.on("connection", (socket) => {
   });
 
   // new message
-  socket.on("new message", (message, time) => {
+  socket.on("new message", (message, time ) => {
     const newMessage = {
       username: socket.username,
       userId: socket.userId,
+      photoURL: socket.photoURL,
       message,
       time,
     };
